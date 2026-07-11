@@ -3,7 +3,7 @@ services:
     name: kasimob-backend
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: apt-get update && apt-get install -y python3 make g++ && npm install
     startCommand: npm start
     disk:
       name: kasimob-data
@@ -12,17 +12,4 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 18
-      - key: ADMIN_PASSWORD
-        value: 11kasisi72
-      - key: SESSION_SECRET
-        generateValue: true
-      - key: MPESA_CONSUMER_KEY
-        value: k232eutaV7AgV8jgFGJkKghNFeMlwZp2Bfq9Q1GFwRF0puc9
-      - key: MPESA_CONSUMER_SECRET
-        value: LxKcEVb5WwZXzr3keUFul3LaLVwE0F4OuAOeVbYa6gfzoKPWQJH5Kd1EtYZsekTy
-      - key: MPESA_SHORTCODE
-        value: "174379"
-      - key: MPESA_PASSKEY
-        value: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
-      - key: MPESA_BASE_URL
-        value: https://sandbox.safaricom.co.ke
+      # ... your other env vars

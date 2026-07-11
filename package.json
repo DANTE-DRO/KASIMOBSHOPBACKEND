@@ -16,6 +16,6 @@
     "axios": "^1.7.2",
     "express-session": "^1.18.0",
     "connect-sqlite3": "^0.9.15",
-    "better-sqlite3": "^11.1.2"
+    "sqlite3": "^5.1.7"
   }
 }
