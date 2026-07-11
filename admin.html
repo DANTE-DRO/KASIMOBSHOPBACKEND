@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KASIMOB Admin Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --gold: #d4af37; --gold-dark: #b8941f; --gold-light: #f4d03f;
+  --bg: #0a0a0a; --card: #1a1a1a; --card-2: #222;
+  --red: #e63946; --green: #06d6a0; --blue: #3498db;
+}
+body {
+  font-family:'Poppins', sans-serif;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2a2015 100%);
+  color: #f5f5f5; min-height:100vh;
+}
+a { color: inherit; text-decoration:none; }
+button { cursor:pointer; font-family:inherit; border:none; }
+
+/* ===== LOGIN ===== */
+.login-wrap {
+  min-height: 100vh; display:flex; align-items:center; justify-content:center;
+  padding: 20px;
+}
+.login-box {
+  background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+  border: 2px solid var(--gold); border-radius: 12px;
+  padding: 40px; max-width: 400px; width:100%;
+  box-shadow: 0 25px 80px rgba(212,175,55,.2);
+}
+.login-box .logo {
+  font-family:'Cinzel', serif; font-size: 32px; font-weight:800;
+  color: var(--gold); text-align:center; letter-spacing:2px; margin-bottom:5px;
+}
+.login-box .sub {
+  color:#999; text-align:center; margin-bottom:25px; font-size:13px; letter-spacing:1px;
+}
+.login-box label {
+  display:block; margin-bottom:6px; color: var(--gold); font-size:13px;
+}
+.login-box input {
+  width:100%; padding:12px; background: rgba(255,255,255,.05);
+  border: 1px solid rgba(212,175,55,.3); color:#fff;
+  border-radius:6px; outline:none; margin-bottom:15px;
+}
+.login-box input:focus { border-color: var(--gold); }
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+  color: #000; font-weight:700; padding: 12px 24px; border-radius:6px;
+  letter-spacing:1px; width:100%; transition: all .3s;
+}
+.btn-gold:hover { background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 100%); }
+.login-error {
+  color: var(--red); text-align:center; margin-top: 10px; font-size:13px; min-height:20px;
+}
+
+/* ===== DASHBOARD ===== */
+.dashboard { display: none; }
+.dashboard.active { display:block; }
+
+.top-nav {
+  background: #000; border-bottom: 2px solid var(--gold); padding: 15px 30px;
+  display:flex; justify-content:space-between; align-items:center;
+  position: sticky; top:0; z-index: 100;
+}
+.top-nav .brand {
+  font-family:'Cinzel', serif; font-size:22px; color: var(--gold); letter-spacing:2px;
+}
+.top-nav .brand small { color:#999; font-size:11px; letter-spacing:2px; }
+.top-nav .actions { display:flex; gap:10px; align-items:center; }
+.btn-logout {
+  background: transparent; border:1px solid var(--red); color: var(--red);
+  padding: 8px 16px; border-radius:6px; font-size:13px;
+}
+.btn-logout:hover { background: var(--red); color:#fff; }
+
+.container { max-width: 1400px; margin: 0 auto; padding: 25px; }
+
+/* ===== STATS ===== */
+.stats-grid {
+  display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap:15px; margin-bottom: 30px;
+}
+.stat-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2015 100%);
+  border: 1px solid rgba(212,175,55,.3); border-radius: 10px;
+  padding: 20px; transition: all .3s;
+}
+.stat-card:hover { border-color: var(--gold); transform: translateY(-3px); }
+.stat-card .icon {
+  width: 45px; height:45px; border-radius:10px;
+  background: rgba(212,175,55,.15); color: var(--gold);
+  display:flex; align-items:center; justify-content:center; font-size:20px; margin-bottom:12px;
+}
+.stat-card .label { color:#999; font-size:12px; letter-spacing:1px; }
+.stat-card .value { color: var(--gold); font-size:24px; font-weight:700; margin-top:5px; }
+
+/* ===== TABS ===== */
+.tabs {
+  display:flex; gap:5px; border-bottom: 1px solid rgba(212,175,55,.2);
+  margin-bottom: 25px; overflow-x:auto;
+}
+.tab {
+  padding: 12px 20px; color:#999; background:none;
+  border-bottom: 3px solid transparent; font-size: 14px; font-weight:500;
+  white-space: nowrap; transition: all .3s;
+}
+.tab:hover { color: var(--gold); }
+.tab.active { color: var(--gold); border-bottom-color: var(--gold); font-weight:600; }
+
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+/* ===== TABLES ===== */
+.table-wrap {
+  background: #1a1a1a; border-radius: 10px; overflow-x: auto;
+  border:1px solid rgba(212,175,55,.15);
+}
+table { width:100%; border-collapse: collapse; min-width:800px; }
+th {
+  background: rgba(212,175,55,.1); color: var(--gold);
+  padding: 14px 15px; text-align:left; font-size: 12px;
+  letter-spacing:1px; text-transform:uppercase;
+}
+td {
+  padding: 12px 15px; border-top: 1px solid rgba(212,175,55,.1);
+  font-size: 13px; color: #ddd;
+}
+tr:hover td { background: rgba(212,175,55,.03); }
+.status {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+}
+.status.PAID { background: rgba(6,214,160,.15); color: var(--green); }
+.status.PENDING { background: rgba(52,152,219,.15); color: var(--blue); }
+.status.FAILED { background: rgba(230,57,70,.15); color: var(--red); }
+
+.empty-row {
+  text-align:center; padding: 40px !important; color:#666;
+}
+.empty-row i { font-size: 40px; opacity:.3; margin-bottom:10px; display:block; }
+
+/* ===== EXPAND ITEMS ===== */
+.items-preview {
+  color: var(--gold); cursor:pointer; text-decoration:underline;
+}
+.items-detail {
+  background: #0a0a0a; padding: 15px; border-radius: 6px;
+  margin-top:10px; font-size:12px; color:#ccc;
+}
+.items-detail .row {
+  display:flex; justify-content:space-between; padding: 5px 0;
+  border-bottom: 1px solid rgba(212,175,55,.1);
+}
+
+.btn-danger {
+  background: transparent; border:1px solid var(--red); color: var(--red);
+  padding: 5px 10px; border-radius:4px; font-size:11px;
+}
+.btn-danger:hover { background: var(--red); color:#fff; }
+
+.refresh-btn {
+  background: rgba(212,175,55,.15); color: var(--gold);
+  border:1px solid var(--gold); padding: 8px 14px; border-radius:6px;
+  font-size:12px; margin-bottom:15px;
+}
+
+.section-title {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom: 15px;
+}
+.section-title h2 {
+  font-family:'Cinzel', serif; color: var(--gold); font-size:18px;
+}
+
+@media (max-width: 768px) {
+  .container { padding: 15px; }
+  .top-nav { padding: 12px 15px; }
+  .top-nav .brand { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-box">
+    <div class="logo">KASIMOB</div>
+    <div class="sub">ADMIN PANEL</div>
+    <form id="loginForm">
+      <label>Admin Password</label>
+      <input type="password" id="passwordInput" placeholder="Enter admin password" autocomplete="current-password" required>
+      <button type="submit" class="btn-gold"><i class="fas fa-lock"></i> LOGIN</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ DASHBOARD ============ -->
+<div class="dashboard" id="dashboard">
+  <div class="top-nav">
+    <div class="brand">
+      KASIMOB<br><small>ADMIN PANEL</small>
+    </div>
+    <div class="actions">
+      <button class="btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- STATS -->
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" data-tab="orders"><i class="fas fa-shopping-cart"></i> Orders</button>
+      <button class="tab" data-tab="customers"><i class="fas fa-users"></i> Customers</button>
+      <button class="tab" data-tab="carts"><i class="fas fa-basket-shopping"></i> Cart Activity</button>
+    </div>
+
+    <!-- ORDERS PANEL -->
+    <div class="tab-panel active" id="tab-orders">
+      <div class="section-title">
+        <h2><i class="fas fa-shopping-cart"></i> All Orders</h2>
+        <button class="refresh-btn" onclick="loadAll()"><i class="fas fa-sync"></i> Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th><th>Customer</th><th>Contact</th>
+              <th>Location</th><th>Amount</th><th>Items</th>
+              <th>Status</th><th>Date</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CUSTOMERS PANEL -->
+    <div class="tab-panel" id="tab-customers">
+      <div class="section-title">
+        <h2><i class="fas fa-users"></i> Customers</h2>
+        <button class="refresh-btn" onclick="loadAll()"><i class="fas fa-sync"></i> Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Phone</th>
+              <th>Location</th><th>Total Orders</th><th>Total Spent</th><th>Joined</th>
+            </tr>
+          </thead>
+          <tbody id="customersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CARTS PANEL -->
+    <div class="tab-panel" id="tab-carts">
+      <div class="section-title">
+        <h2><i class="fas fa-basket-shopping"></i> Cart Activity (last 200)</h2>
+        <button class="refresh-btn" onclick="loadAll()"><i class="fas fa-sync"></i> Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Session</th><th>Items</th><th>Total Items</th><th>Timestamp</th></tr>
+          </thead>
+          <tbody id="cartsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== ADMIN APP =====
+const API = ''; // same origin
+
+// Check session
+async function checkAuth() {
+  try {
+    const r = await fetch(API + '/api/admin/me', { credentials: 'include' });
+    const d = await r.json();
+    if (d.isAdmin) showDashboard();
+    else showLogin();
+  } catch { showLogin(); }
+}
+
+function showLogin() {
+  document.getElementById('loginWrap').style.display = 'flex';
+  document.getElementById('dashboard').classList.remove('active');
+}
+function showDashboard() {
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('dashboard').classList.add('active');
+  loadAll();
+}
+
+// Login
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pwd = document.getElementById('passwordInput').value;
+  const err = document.getElementById('loginError');
+  err.textContent = '';
+  try {
+    const r = await fetch(API + '/api/admin/login', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    });
+    const d = await r.json();
+    if (d.success) showDashboard();
+    else err.textContent = 'Invalid password';
+  } catch (ex) {
+    err.textContent = 'Server error';
+  }
+});
+
+async function logout() {
+  await fetch(API + '/api/admin/logout', { method: 'POST', credentials: 'include' });
+  showLogin();
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  };
+});
+
+// Load All
+async function loadAll() {
+  await Promise.all([loadStats(), loadOrders(), loadCustomers(), loadCarts()]);
+}
+
+async function loadStats() {
+  const r = await fetch(API + '/api/admin/stats', { credentials: 'include' });
+  if (!r.ok) return;
+  const s = await r.json();
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card">
+      <div class="icon"><i class="fas fa-shopping-cart"></i></div>
+      <div class="label">TOTAL ORDERS</div>
+      <div class="value">${s.totalOrders}</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon"><i class="fas fa-check-circle"></i></div>
+      <div class="label">PAID ORDERS</div>
+      <div class="value">${s.paidOrders}</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon"><i class="fas fa-coins"></i></div>
+      <div class="label">TOTAL REVENUE</div>
+      <div class="value">KSh ${Number(s.totalRevenue).toLocaleString()}</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon"><i class="fas fa-users"></i></div>
+      <div class="label">CUSTOMERS</div>
+      <div class="value">${s.totalCustomers}</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon"><i class="fas fa-basket-shopping"></i></div>
+      <div class="label">CART EVENTS</div>
+      <div class="value">${s.totalCarts}</div>
+    </div>
+  `;
+}
+
+async function loadOrders() {
+  const r = await fetch(API + '/api/admin/orders', { credentials: 'include' });
+  const d = await r.json();
+  const body = document.getElementById('ordersBody');
+  if (!d.orders || d.orders.length === 0) {
+    body.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-inbox"></i>No orders yet</td></tr>`;
+    return;
+  }
+  body.innerHTML = d.orders.map(o => `
+    <tr>
+      <td><code style="color:var(--gold);">${o.order_id}</code></td>
+      <td><strong>${o.name}</strong><br><small style="color:#888;">${o.email}</small></td>
+      <td>${o.phone}</td>
+      <td>${o.location}</td>
+      <td style="color:var(--gold);"><strong>KSh ${Number(o.amount).toLocaleString()}</strong></td>
+      <td>
+        <span class="items-preview" onclick="toggleItems(this)">${o.items?.length || 0} items ▼</span>
+        <div class="items-detail" style="display:none;">
+          ${(o.items || []).map(i => `<div class="row"><span>${i.name} × ${i.qty}</span><span style="color:var(--gold);">KSh ${(i.price*i.qty).toLocaleString()}</span></div>`).join('')}
+        </div>
+      </td>
+      <td><span class="status ${o.status}">${o.status}</span>${o.mpesa_receipt ? `<br><small style="color:var(--green);">${o.mpesa_receipt}</small>` : ''}</td>
+      <td><small>${new Date(o.created_at).toLocaleString()}</small></td>
+      <td><button class="btn-danger" onclick="deleteOrder(${o.id})"><i class="fas fa-trash"></i></button></td>
+    </tr>
+  `).join('');
+}
+
+async function loadCustomers() {
+  const r = await fetch(API + '/api/admin/customers', { credentials: 'include' });
+  const d = await r.json();
+  const body = document.getElementById('customersBody');
+  if (!d.customers || d.customers.length === 0) {
+    body.innerHTML = `<tr><td colspan="7" class="empty-row"><i class="fas fa-user-slash"></i>No customers yet</td></tr>`;
+    return;
+  }
+  body.innerHTML = d.customers.map(c => `
+    <tr>
+      <td><strong>${c.name}</strong></td>
+      <td>${c.email}</td>
+      <td>${c.phone}</td>
+      <td>${c.location}</td>
+      <td><span style="color:var(--gold);font-weight:600;">${c.total_orders}</span></td>
+      <td style="color:var(--gold);"><strong>KSh ${Number(c.total_spent).toLocaleString()}</strong></td>
+      <td><small>${new Date(c.created_at).toLocaleString()}</small></td>
+    </tr>
+  `).join('');
+}
+
+async function loadCarts() {
+  const r = await fetch(API + '/api/admin/carts', { credentials: 'include' });
+  const d = await r.json();
+  const body = document.getElementById('cartsBody');
+  if (!d.carts || d.carts.length === 0) {
+    body.innerHTML = `<tr><td colspan="4" class="empty-row"><i class="fas fa-shopping-basket"></i>No cart activity yet</td></tr>`;
+    return;
+  }
+  body.innerHTML = d.carts.map(c => `
+    <tr>
+      <td><code style="font-size:11px;color:#888;">${c.session_id?.slice(0,20) || '-'}</code></td>
+      <td>
+        <span class="items-preview" onclick="toggleItems(this)">${c.items?.length || 0} items ▼</span>
+        <div class="items-detail" style="display:none;">
+          ${(c.items || []).map(i => `<div class="row"><span>${i.name} × ${i.qty}</span><span style="color:var(--gold);">KSh ${(i.price*i.qty).toLocaleString()}</span></div>`).join('')}
+        </div>
+      </td>
+      <td>${(c.items || []).reduce((s,i)=>s+(i.qty||0), 0)}</td>
+      <td><small>${new Date(c.timestamp).toLocaleString()}</small></td>
+    </tr>
+  `).join('');
+}
+
+function toggleItems(el) {
+  const detail = el.nextElementSibling;
+  const shown = detail.style.display !== 'none';
+  detail.style.display = shown ? 'none' : 'block';
+  el.textContent = el.textContent.replace(shown ? '▲' : '▼', shown ? '▼' : '▲');
+}
+
+async function deleteOrder(id) {
+  if (!confirm('Delete this order?')) return;
+  await fetch(API + '/api/admin/orders/' + id, { method: 'DELETE', credentials: 'include' });
+  loadAll();
+}
+
+// Auto refresh every 30 seconds when logged in
+setInterval(() => {
+  if (document.getElementById('dashboard').classList.contains('active')) loadAll();
+}, 30000);
+
+// Boot
+checkAuth();
+</script>
+</body>
+</html>

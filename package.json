@@ -1,0 +1,21 @@
+{
+  "name": "kasimob-backend",
+  "version": "1.0.0",
+  "description": "KASIMOB e-commerce backend with M-Pesa STK Push and admin panel",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "axios": "^1.7.2",
+    "express-session": "^1.18.0",
+    "connect-sqlite3": "^0.9.15",
+    "better-sqlite3": "^11.1.2"
+  }
+}
