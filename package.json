@@ -1,7 +1,7 @@
 {
   "name": "kasimob-backend",
-  "version": "1.0.0",
-  "description": "KASIMOB e-commerce backend with M-Pesa STK Push and admin panel",
+  "version": "1.2.0",
+  "description": "KASIMOB e-commerce backend with M-Pesa STK Push, user auth, Google Sign-In, and admin panel",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -3,7 +3,7 @@ services:
     name: kasimob-backend
     runtime: node
     plan: free
-    buildCommand: apt-get update && apt-get install -y python3 make g++ && npm install
+    buildCommand: npm install
     startCommand: npm start
     disk:
       name: kasimob-data
@@ -11,5 +11,19 @@ services:
       sizeGB: 1
     envVars:
       - key: NODE_VERSION
-        value: 18
-      # ... your other env vars
+        value: 20
+      - key: NODE_ENV
+        value: production
+      # ---- Required M-Pesa vars (set in Render dashboard) ----
+      # - key: MPESA_CONSUMER_KEY
+      # - key: MPESA_CONSUMER_SECRET
+      # - key: MPESA_SHORTCODE
+      # - key: MPESA_PASSKEY
+      # - key: MPESA_BASE_URL
+      # - key: MPESA_CALLBACK_URL
+      # ---- Admin & session ----
+      # - key: ADMIN_PASSWORD
+      # - key: SESSION_SECRET
+      # ---- Google Sign-In (optional) ----
+      # - key: GOOGLE_CLIENT_ID
+      #   value: 1234567890-abc.apps.googleusercontent.com
