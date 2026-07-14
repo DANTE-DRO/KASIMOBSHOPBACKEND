@@ -27,3 +27,21 @@ services:
       # ---- Google Sign-In (optional) ----
       # - key: GOOGLE_CLIENT_ID
       #   value: 1234567890-abc.apps.googleusercontent.com
+      # ---- Email / SMTP (welcome + receipt + reset-password) ----
+      # Recommended: Gmail with a 16-char App Password (Account -> Security -> 2FA -> App passwords)
+      # - key: SMTP_HOST
+      #   value: smtp.gmail.com
+      # - key: SMTP_PORT
+      #   value: "465"
+      # - key: SMTP_SECURE
+      #   value: "true"
+      # - key: SMTP_USER
+      #   value: kasisim388@gmail.com
+      # - key: SMTP_PASS
+      #   value: your-gmail-app-password
+      # - key: MAIL_FROM
+      #   value: KASIMOB <kasisim388@gmail.com>
+      # - key: SHOP_EMAIL
+      #   value: kasisim388@gmail.com
+      # - key: PUBLIC_BASE_URL
+      #   value: https://kasimobshopbackend.onrender.com

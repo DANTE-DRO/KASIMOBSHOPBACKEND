@@ -219,6 +219,7 @@ tr:hover td { background: rgba(212,175,55,.03); }
     <div class="tabs">
       <button class="tab active" data-tab="orders"><i class="fas fa-shopping-cart"></i> Orders</button>
       <button class="tab" data-tab="customers"><i class="fas fa-users"></i> Customers</button>
+      <button class="tab" data-tab="users"><i class="fas fa-user-shield"></i> Registered Users</button>
       <button class="tab" data-tab="carts"><i class="fas fa-basket-shopping"></i> Cart Activity</button>
     </div>
 
@@ -234,10 +235,28 @@ tr:hover td { background: rgba(212,175,55,.03); }
             <tr>
               <th>Order ID</th><th>Customer</th><th>Contact</th>
               <th>Location</th><th>Amount</th><th>Items</th>
-              <th>Status</th><th>Date</th><th></th>
+              <th>Status</th><th>Progress</th><th>Date</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- USERS PANEL -->
+    <div class="tab-panel" id="tab-users">
+      <div class="section-title">
+        <h2><i class="fas fa-user-shield"></i> Registered Users</h2>
+        <button class="refresh-btn" onclick="loadAll()"><i class="fas fa-sync"></i> Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Email</th><th>Provider</th><th>Joined</th><th>Last Login</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
         </table>
       </div>
     </div>
@@ -340,8 +359,11 @@ document.querySelectorAll('.tab').forEach(tab => {
 
 // Load All
 async function loadAll() {
-  await Promise.all([loadStats(), loadOrders(), loadCustomers(), loadCarts()]);
+  await Promise.all([loadStats(), loadOrders(), loadCustomers(), loadUsers(), loadCarts()]);
 }
+
+// Progress step choices offered to admin
+const PROGRESS_OPTIONS = ['Placed','Processing','Packed','Shipped','Out for Delivery','Delivered','Cancelled'];
 
 async function loadStats() {
   const r = await fetch(API + '/api/admin/stats', { credentials: 'include' });
@@ -384,12 +406,16 @@ async function loadOrders() {
     body.innerHTML = `<tr><td colspan="9" class="empty-row"><i class="fas fa-inbox"></i>No orders yet</td></tr>`;
     return;
   }
-  body.innerHTML = d.orders.map(o => `
+  body.innerHTML = d.orders.map(o => {
+    const prog = o.progress || 'Placed';
+    const opts = PROGRESS_OPTIONS.map(v => `<option value="${v}" ${v===prog?'selected':''}>${v}</option>`).join('');
+    const canResend = o.status === 'PAID';
+    return `
     <tr>
       <td><code style="color:var(--gold);">${o.order_id}</code></td>
-      <td><strong>${o.name}</strong><br><small style="color:#888;">${o.email}</small></td>
-      <td>${o.phone}</td>
-      <td>${o.location}</td>
+      <td><strong>${o.name || ''}</strong><br><small style="color:#888;">${o.email || ''}</small></td>
+      <td>${o.phone || ''}</td>
+      <td>${o.location || ''}</td>
       <td style="color:var(--gold);"><strong>KSh ${Number(o.amount).toLocaleString()}</strong></td>
       <td>
         <span class="items-preview" onclick="toggleItems(this)">${o.items?.length || 0} items ▼</span>
@@ -398,10 +424,73 @@ async function loadOrders() {
         </div>
       </td>
       <td><span class="status ${o.status}">${o.status}</span>${o.mpesa_receipt ? `<br><small style="color:var(--green);">${o.mpesa_receipt}</small>` : ''}</td>
+      <td>
+        <select id="prog-${o.id}" style="background:#111;color:#f5f5f5;border:1px solid rgba(212,175,55,.4);border-radius:6px;padding:6px 8px;font-size:12px;">${opts}</select>
+        <button onclick="saveProgress(${o.id})" style="background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#000;font-weight:700;padding:6px 10px;border-radius:6px;font-size:11px;margin-top:4px;display:block;width:100%;cursor:pointer;border:none;"><i class="fas fa-save"></i> SAVE</button>
+      </td>
       <td><small>${new Date(o.created_at).toLocaleString()}</small></td>
-      <td><button class="btn-danger" onclick="deleteOrder(${o.id})"><i class="fas fa-trash"></i></button></td>
+      <td style="white-space:nowrap;">
+        ${canResend ? `<button title="Resend receipt email" onclick="resendReceipt(${o.id})" style="background:transparent;border:1px solid var(--gold);color:var(--gold);padding:6px 8px;border-radius:6px;margin-right:4px;cursor:pointer;"><i class="fas fa-envelope"></i></button>
+           <a title="Open receipt" href="/api/receipt/${encodeURIComponent(o.order_id)}" target="_blank" style="background:transparent;border:1px solid var(--green);color:var(--green);padding:6px 8px;border-radius:6px;margin-right:4px;display:inline-block;text-decoration:none;"><i class="fas fa-file-pdf"></i></a>` : ''}
+        <button class="btn-danger" onclick="deleteOrder(${o.id})"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadUsers() {
+  const r = await fetch(API + '/api/admin/users', { credentials: 'include' });
+  if (!r.ok) return;
+  const d = await r.json();
+  const body = document.getElementById('usersBody');
+  if (!body) return;
+  if (!d.users || d.users.length === 0) {
+    body.innerHTML = `<tr><td colspan="5" class="empty-row"><i class="fas fa-user-slash"></i>No registered users yet</td></tr>`;
+    return;
+  }
+  body.innerHTML = d.users.map(u => `
+    <tr>
+      <td><strong>${u.name || '—'}</strong></td>
+      <td>${u.email}</td>
+      <td><span style="padding:3px 10px;border-radius:12px;font-size:11px;letter-spacing:1px;background:${u.provider==='google'?'rgba(66,133,244,.15)':'rgba(212,175,55,.15)'};color:${u.provider==='google'?'#4285f4':'var(--gold)'};border:1px solid ${u.provider==='google'?'#4285f4':'var(--gold)'};">${(u.provider||'local').toUpperCase()}</span></td>
+      <td><small>${new Date(u.created_at).toLocaleString()}</small></td>
+      <td><small>${u.last_login ? new Date(u.last_login).toLocaleString() : '—'}</small></td>
     </tr>
   `).join('');
+}
+
+async function saveProgress(id) {
+  const sel = document.getElementById('prog-' + id);
+  if (!sel) return;
+  const progress = sel.value;
+  try {
+    const r = await fetch(API + '/api/admin/orders/' + id + '/progress', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ progress }),
+    });
+    const d = await r.json();
+    if (r.ok && d.success) {
+      alert('✅ Progress updated to "' + progress + '" and customer notified by email.');
+      loadOrders();
+    } else {
+      alert('❌ ' + (d.error || 'Could not update progress.'));
+    }
+  } catch (ex) {
+    alert('❌ Server error.');
+  }
+}
+
+async function resendReceipt(id) {
+  if (!confirm('Resend receipt email to the customer?')) return;
+  try {
+    const r = await fetch(API + '/api/admin/orders/' + id + '/resend-receipt', {
+      method: 'POST', credentials: 'include',
+    });
+    const d = await r.json();
+    if (r.ok && d.success) alert('✉️ Receipt resent.');
+    else alert('❌ ' + (d.error || 'Could not resend.'));
+  } catch { alert('❌ Server error.'); }
 }
 
 async function loadCustomers() {

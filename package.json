@@ -1,7 +1,7 @@
 {
   "name": "kasimob-backend",
-  "version": "1.2.0",
-  "description": "KASIMOB e-commerce backend with M-Pesa STK Push, user auth, Google Sign-In, and admin panel",
+  "version": "1.3.0",
+  "description": "KASIMOB e-commerce backend with M-Pesa STK Push, user auth, Google Sign-In, admin panel, welcome & receipt emails, order progress tracking",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -16,6 +16,7 @@
     "axios": "^1.7.2",
     "express-session": "^1.18.0",
     "connect-sqlite3": "^0.9.15",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "nodemailer": "^6.9.14"
   }
 }
