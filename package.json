@@ -11,12 +11,12 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "cors": "^2.8.5",
     "axios": "^1.7.2",
+    "connect-sqlite3": "^0.9.13",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
     "express-session": "^1.18.0",
-    "connect-sqlite3": "^0.9.15",
-    "sqlite3": "^5.1.7",
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.14",
+    "sqlite3": "^5.1.6"
   }
 }

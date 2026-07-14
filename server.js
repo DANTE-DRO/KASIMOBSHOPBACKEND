@@ -51,8 +51,10 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const SMTP_HOST   = process.env.SMTP_HOST   || 'smtp.gmail.com';
 const SMTP_PORT   = parseInt(process.env.SMTP_PORT || '465', 10);
 const SMTP_SECURE = (process.env.SMTP_SECURE || 'true') === 'true';   // true for 465, false for 587
-const SMTP_USER   = process.env.SMTP_USER   || '';                    // e.g. kasisim388@gmail.com
-const SMTP_PASS   = process.env.SMTP_PASS   || '';                    // Gmail App Password (16 chars)
+const SMTP_USER   = (process.env.SMTP_USER || '').trim();             // e.g. kasisim388@gmail.com
+// IMPORTANT: Gmail shows app passwords like "qvxf tvow wmbw sgvr" with spaces —
+// spaces MUST be stripped or SMTP AUTH will fail with "Username and Password not accepted".
+const SMTP_PASS   = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 const MAIL_FROM   = process.env.MAIL_FROM   || 'KASIMOB <kasisim388@gmail.com>';
 const SHOP_EMAIL  = process.env.SHOP_EMAIL  || 'kasisim388@gmail.com';
 // PUBLIC_BASE_URL is used in email links (reset password, receipt download)
@@ -87,6 +89,12 @@ app.use(session({
     secure: isProd,
   },
 }));
+
+// Attach bearer-token auth AFTER session middleware so req.session is defined.
+// This lets STK push (and any other authenticated endpoint) work even when the
+// browser blocks cross-site session cookies — the frontend sends the token
+// it received on signup/login in the Authorization header.
+app.use((req, res, next) => attachUserFromToken(req, res, next));
 
 // ============ DATABASE ============
 const dbPath = path.join(DATA_DIR, 'kasimob.db');
@@ -166,6 +174,31 @@ db.serialize(() => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // 6-digit OTP codes for password reset (in addition to email link)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS password_otps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      email TEXT NOT NULL,
+      code TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used INTEGER DEFAULT 0,
+      attempts INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Long-lived bearer tokens (so auth works even when cross-site cookies are blocked)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS auth_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_used DATETIME
+    )
+  `);
 });
 
 // ============ HELPERS ============
@@ -185,9 +218,48 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: 'Unauthorized. Please login.' });
 }
 
+// Attach a user to req from either the session cookie OR an Authorization: Bearer token.
+// This runs on every request so downstream handlers can rely on req.session.userId.
+function attachUserFromToken(req, res, next) {
+  // Session already has a user — nothing to do
+  if (req.session && req.session.userId) return next();
+
+  const h = req.headers['authorization'] || req.headers['Authorization'] || '';
+  const m = /^Bearer\s+(.+)$/i.exec(h);
+  if (!m) return next();
+  const token = m[1].trim();
+  if (!token) return next();
+
+  db.get(
+    `SELECT at.user_id, u.email, u.name
+       FROM auth_tokens at JOIN users u ON u.id = at.user_id
+      WHERE at.token = ?`,
+    [token],
+    (err, row) => {
+      if (!err && row) {
+        req.session.userId    = row.user_id;
+        req.session.userEmail = row.email;
+        req.session.userName  = row.name || '';
+        db.run('UPDATE auth_tokens SET last_used = CURRENT_TIMESTAMP WHERE token = ?', [token]);
+      }
+      next();
+    }
+  );
+}
+
 function requireUser(req, res, next) {
   if (req.session.userId) return next();
   return res.status(401).json({ error: 'Please sign in to continue.' });
+}
+
+// Issue a fresh bearer token for a user id
+function issueAuthToken(userId, cb) {
+  const token = crypto.randomBytes(32).toString('hex');
+  db.run(
+    `INSERT INTO auth_tokens (user_id, token, last_used) VALUES (?, ?, CURRENT_TIMESTAMP)`,
+    [userId, token],
+    (err) => cb(err, token)
+  );
 }
 
 // Password hashing (scrypt — Node built-in, no extra deps)
@@ -254,7 +326,8 @@ async function sendEmail({ to, subject, html, text }) {
   const t = getMailer();
   if (!t) {
     console.log(`📭 [email skipped — SMTP not configured] to=${to} subject="${subject}"`);
-    return { skipped: true };
+    console.log(`   Set SMTP_USER and SMTP_PASS (Gmail App Password) in Render env vars to enable email.`);
+    return { skipped: true, error: 'SMTP not configured' };
   }
   try {
     const info = await t.sendMail({
@@ -267,8 +340,30 @@ async function sendEmail({ to, subject, html, text }) {
     console.log(`✉️  Email sent to ${to}: ${info.messageId}`);
     return { ok: true, id: info.messageId };
   } catch (e) {
-    console.error(`Email send failed to ${to}:`, e.message);
+    console.error(`❌ Email send failed to ${to}:`, e.message);
+    if (/Invalid login|Username and Password not accepted|BadCredentials/i.test(e.message)) {
+      console.error('   → Gmail App Password rejected. Regenerate at https://myaccount.google.com/apppasswords');
+      console.error('   → Make sure 2-Step Verification is ON and remove any spaces from the 16-char password.');
+    }
     return { ok: false, error: e.message };
+  }
+}
+
+// Verify SMTP configuration on boot so mis-configuration is loud in Render logs
+async function verifyMailerOnBoot() {
+  const t = getMailer();
+  if (!t) {
+    console.log('📭 Email disabled: SMTP_USER / SMTP_PASS not set (or nodemailer missing).');
+    return;
+  }
+  try {
+    await t.verify();
+    console.log(`✅ SMTP ready — outgoing mail as ${SMTP_USER} via ${SMTP_HOST}:${SMTP_PORT}`);
+  } catch (e) {
+    console.error(`❌ SMTP verify failed: ${e.message}`);
+    console.error('   Fix: regenerate a Gmail App Password (2FA required) and set SMTP_PASS on Render.');
+    // Drop the broken transporter so the next sendEmail() rebuilds it after env vars change
+    _mailTransport = null;
   }
 }
 
@@ -390,6 +485,39 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+// Diagnostic: quick email-health check (admin only)
+app.get('/api/admin/email-health', requireAdmin, async (req, res) => {
+  const cfg = {
+    nodemailerLoaded: !!nodemailer,
+    smtpHost: SMTP_HOST,
+    smtpPort: SMTP_PORT,
+    smtpSecure: SMTP_SECURE,
+    smtpUser: SMTP_USER || '(not set)',
+    smtpPassSet: !!SMTP_PASS,
+    smtpPassLength: SMTP_PASS.length,
+    mailFrom: MAIL_FROM,
+  };
+  const t = getMailer();
+  if (!t) return res.json({ ok: false, configured: false, ...cfg, error: 'SMTP not configured' });
+  try {
+    await t.verify();
+    return res.json({ ok: true, configured: true, ...cfg });
+  } catch (e) {
+    return res.json({ ok: false, configured: true, ...cfg, error: e.message });
+  }
+});
+
+// Diagnostic: send a test email (admin only)
+app.post('/api/admin/email-test', requireAdmin, async (req, res) => {
+  const to = (req.body && req.body.to) ? String(req.body.to).trim() : SHOP_EMAIL;
+  const r = await sendEmail({
+    to,
+    subject: '✅ KASIMOB test email',
+    html: emailShell('Test email', '<p>If you can read this, your SMTP setup is working correctly. 🎉</p>'),
+  });
+  res.json(r);
+});
+
 // ============ AUTH: USER (email/password + Google) ============
 
 // Sign up (email + password)
@@ -434,9 +562,22 @@ app.post('/api/auth/signup', (req, res) => {
           to: em,
           subject: '✨ Welcome to KASIMOB',
           html: emailShell('Welcome to KASIMOB 👑', body),
-        }).catch(() => {});
+        })
+          .then(r => {
+            if (r && r.ok) console.log(`👋 Welcome email delivered to ${em}`);
+            else if (r && !r.skipped) console.warn(`⚠️  Welcome email failed for ${em}: ${r.error || 'unknown'}`);
+          })
+          .catch(() => {});
 
-        res.json({ success: true, user: { id: this.lastID, email: em, name: name || '', provider: 'local' } });
+        // Also issue a bearer token so the client can auth without depending on the session cookie
+        const newUserId = this.lastID;
+        issueAuthToken(newUserId, (e3, token) => {
+          res.json({
+            success: true,
+            token: token || null,
+            user: { id: newUserId, email: em, name: name || '', provider: 'local' },
+          });
+        });
       }
     );
   });
@@ -460,8 +601,113 @@ app.post('/api/auth/login', (req, res) => {
     req.session.userEmail = user.email;
     req.session.userName  = user.name || '';
     db.run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
-    res.json({ success: true, user: { id: user.id, email: user.email, name: user.name || '', provider: user.provider, picture: user.picture } });
+    issueAuthToken(user.id, (e2, token) => {
+      res.json({
+        success: true,
+        token: token || null,
+        user: { id: user.id, email: user.email, name: user.name || '', provider: user.provider, picture: user.picture },
+      });
+    });
   });
+});
+
+// ============ FORGOT PASSWORD (OTP flow) ============
+// Step 1: request an OTP code by email
+app.post('/api/auth/forgot-otp', (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'Email is required.' });
+  const em = String(email).trim().toLowerCase();
+
+  // Uniform response — do not leak which emails exist
+  const respond = () => res.json({ success: true, message: 'If an account exists for this email, a 6-digit code has been sent.' });
+
+  db.get('SELECT id, email, name FROM users WHERE email = ?', [em], (err, user) => {
+    if (err || !user) return respond();
+
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+    const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+
+    // Invalidate previous unused codes for this user
+    db.run(`UPDATE password_otps SET used = 1 WHERE user_id = ? AND used = 0`, [user.id], () => {
+      db.run(
+        `INSERT INTO password_otps (user_id, email, code, expires_at) VALUES (?, ?, ?, ?)`,
+        [user.id, user.email, code, expires],
+        (e2) => {
+          if (e2) { console.error('OTP insert error:', e2.message); return respond(); }
+          const body = `
+            <p>Hello <b>${escapeHtml(user.name || user.email)}</b>,</p>
+            <p>We received a request to reset your KASIMOB password. Use the code below to continue:</p>
+            <div style="text-align:center;margin:22px 0;">
+              <div style="display:inline-block;background:#000;border:2px solid #d4af37;border-radius:10px;padding:18px 28px;">
+                <div style="color:#999;font-size:11px;letter-spacing:3px;">YOUR RESET CODE</div>
+                <div style="color:#d4af37;font-family:'Courier New',monospace;font-size:38px;letter-spacing:10px;font-weight:800;margin-top:6px;">${code}</div>
+              </div>
+            </div>
+            <p style="font-size:12px;color:#aaa;text-align:center;">This code expires in <b>15 minutes</b> and can be used only once.</p>
+            <p style="color:#999;font-size:12px;margin-top:18px;">If you didn't request this, you can safely ignore this email — your password will not change.</p>
+          `;
+          sendEmail({
+            to: user.email,
+            subject: `🔑 Your KASIMOB reset code: ${code}`,
+            html: emailShell('Password reset code', body),
+          })
+            .then(r => {
+              if (r && r.ok) console.log(`🔑 OTP delivered to ${user.email}`);
+              else if (r && !r.skipped) console.warn(`⚠️  OTP email failed for ${user.email}: ${r.error || 'unknown'}`);
+            })
+            .catch(() => {});
+          respond();
+        }
+      );
+    });
+  });
+});
+
+// Step 2: verify OTP + set new password (single call so the client stays simple)
+app.post('/api/auth/reset-otp', (req, res) => {
+  const { email, code, password } = req.body || {};
+  if (!email || !code || !password) {
+    return res.status(400).json({ error: 'Email, code and new password are required.' });
+  }
+  if (String(password).length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+  const em = String(email).trim().toLowerCase();
+  const codeStr = String(code).trim();
+
+  db.get(
+    `SELECT po.*, u.id AS uid
+       FROM password_otps po JOIN users u ON u.id = po.user_id
+      WHERE LOWER(po.email) = ? AND po.used = 0
+      ORDER BY po.id DESC LIMIT 1`,
+    [em],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: 'Database error.' });
+      if (!row) return res.status(400).json({ error: 'No reset code found. Please request a new one.' });
+      if (new Date(row.expires_at) < new Date()) {
+        return res.status(400).json({ error: 'This code has expired. Please request a new one.' });
+      }
+      if (row.attempts >= 5) {
+        db.run(`UPDATE password_otps SET used = 1 WHERE id = ?`, [row.id]);
+        return res.status(400).json({ error: 'Too many attempts. Please request a new code.' });
+      }
+      if (row.code !== codeStr) {
+        db.run(`UPDATE password_otps SET attempts = attempts + 1 WHERE id = ?`, [row.id]);
+        return res.status(400).json({ error: 'Incorrect code. Please check your email and try again.' });
+      }
+
+      const { salt, hash } = hashPassword(password);
+      db.run(
+        `UPDATE users SET password_hash = ?, password_salt = ?, provider = COALESCE(provider,'local') WHERE id = ?`,
+        [hash, salt, row.uid],
+        (e2) => {
+          if (e2) return res.status(500).json({ error: 'Could not update password.' });
+          db.run(`UPDATE password_otps SET used = 1 WHERE id = ?`, [row.id]);
+          res.json({ success: true, message: 'Password updated. You can now sign in.' });
+        }
+      );
+    }
+  );
 });
 
 // Forgot password — sends reset link via email
@@ -663,7 +909,13 @@ app.post('/api/auth/google', async (req, res) => {
           `;
           sendEmail({ to: u.email, subject: '✨ Welcome to KASIMOB', html: emailShell('Welcome to KASIMOB 👑', body) }).catch(()=>{});
         }
-        res.json({ success: true, user: { id: u.id, email: u.email, name: u.name || '', provider: 'google', picture: u.picture } });
+        issueAuthToken(u.id, (e2, token) => {
+          res.json({
+            success: true,
+            token: token || null,
+            user: { id: u.id, email: u.email, name: u.name || '', provider: 'google', picture: u.picture },
+          });
+        });
       };
 
       if (user) {
@@ -703,11 +955,14 @@ app.get('/api/auth/me', (req, res) => {
   });
 });
 
-// Logout user
+// Logout user (also revokes the bearer token if one was sent)
 app.post('/api/auth/logout', (req, res) => {
   req.session.userId = null;
   req.session.userEmail = null;
   req.session.userName = null;
+  const h = req.headers['authorization'] || req.headers['Authorization'] || '';
+  const m = /^Bearer\s+(.+)$/i.exec(h);
+  if (m) db.run('DELETE FROM auth_tokens WHERE token = ?', [m[1].trim()]);
   res.json({ success: true });
 });
 
@@ -1075,5 +1330,7 @@ app.listen(PORT, () => {
   console.log(`✅ KASIMOB backend running on port ${PORT}`);
   console.log(`   Data directory: ${DATA_DIR}`);
   console.log(`   Google sign-in: ${GOOGLE_CLIENT_ID ? 'ENABLED' : 'disabled (set GOOGLE_CLIENT_ID)'}`);
-  console.log(`   Email (SMTP):   ${SMTP_USER && SMTP_PASS ? 'ENABLED as ' + SMTP_USER : 'disabled (set SMTP_USER/SMTP_PASS)'}`);
+  console.log(`   Email (SMTP):   ${SMTP_USER && SMTP_PASS ? 'configured as ' + SMTP_USER : 'disabled (set SMTP_USER/SMTP_PASS)'}`);
+  // Verify SMTP after startup so log clearly says whether email will work
+  verifyMailerOnBoot().catch(() => {});
 });
